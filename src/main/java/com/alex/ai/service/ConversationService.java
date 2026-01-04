@@ -20,7 +20,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 多轮对话服务 - 支持上下文记忆
+ * 多轮对话服务 - 支持上下文记忆和 RAG 知识增强
  * 
  * @author Alex
  * @since 2025-12-31
@@ -35,8 +35,14 @@ public class ConversationService {
     @Autowired(required = false)
     private StreamingChatLanguageModel streamingChatModel;
     
+    @Autowired(required = false)
+    private KnowledgeService knowledgeService;
+    
     // 会话存储 (sessionId -> 消息历史)
     private final Map<String, List<ChatMessage>> sessions = new ConcurrentHashMap<>();
+    
+    // 会话 RAG 开关 (sessionId -> enableRag)
+    private final Map<String, Boolean> sessionRagEnabled = new ConcurrentHashMap<>();
     
     // 最大历史消息数
     private static final int MAX_HISTORY = 20;
@@ -51,7 +57,7 @@ public class ConversationService {
         log.info("创建新会话: {}", sessionId);
         List<ChatMessage> messages = new ArrayList<>();
         // 添加系统提示词
-        messages.add(SystemMessage.from("你是一个友好、专业的 AI 助手，能够帮助用户解决各种问题。"));
+        messages.add(SystemMessage.from("你是一个友好、专业的 AI 助手，能够帮助用户解决各种问题。当提供了参考资料时，请优先基于参考资料回答。"));
         // 注意：不在这里调用 sessions.put()，由 computeIfAbsent 自动处理
         return messages;
     }
@@ -67,6 +73,56 @@ public class ConversationService {
     }
 
     /**
+     * 设置会话的 RAG 开关
+     * 
+     * @param sessionId 会话 ID
+     * @param enabled 是否启用 RAG
+     */
+    public void setRagEnabled(String sessionId, boolean enabled) {
+        sessionRagEnabled.put(sessionId, enabled);
+        log.info("会话 {} RAG 状态: {}", sessionId, enabled ? "启用" : "禁用");
+    }
+
+    /**
+     * 检查会话是否启用 RAG
+     */
+    public boolean isRagEnabled(String sessionId) {
+        return sessionRagEnabled.getOrDefault(sessionId, true); // 默认启用
+    }
+
+    /**
+     * 对用户输入进行 RAG 增强处理
+     * 
+     * @param sessionId 会话 ID
+     * @param input 用户原始输入
+     * @return RAG 增强后的输入（如果有相关知识）或原始输入
+     */
+    private String processWithRag(String sessionId, String input) {
+        if (knowledgeService == null || !isRagEnabled(sessionId)) {
+            return input;
+        }
+        
+        try {
+            // 检查知识库是否有内容
+            var stats = knowledgeService.getStats();
+            if (stats.totalEntries() == 0) {
+                log.debug("知识库为空，跳过 RAG");
+                return input;
+            }
+            
+            // 使用 RAG 增强
+            String augmented = knowledgeService.buildAugmentedPrompt(input);
+            if (!augmented.equals(input)) {
+                log.info("已应用 RAG 增强，会话: {}", sessionId);
+            }
+            return augmented;
+        } catch (Exception e) {
+            log.warn("RAG 处理异常，使用原始输入: {}", e.getMessage());
+            return input;
+        }
+    }
+
+    /**
      * 继续对话
      * 
      * @param sessionId 会话 ID
@@ -79,8 +135,11 @@ public class ConversationService {
             // 获取会话历史
             List<ChatMessage> messages = getOrCreateSession(sessionId);
             
+            // RAG 增强处理
+            String processedInput = processWithRag(sessionId, input);
+            
             // 添加用户消息
-            messages.add(UserMessage.from(input));
+            messages.add(UserMessage.from(processedInput));
             
             // 限制历史消息数量（保留系统消息 + 最近的对话）
             if (messages.size() > MAX_HISTORY) {
@@ -134,8 +193,11 @@ public class ConversationService {
             // 获取会话历史
             List<ChatMessage> messages = getOrCreateSession(sessionId);
             
+            // RAG 增强处理
+            String processedInput = processWithRag(sessionId, input);
+            
             // 添加用户消息
-            messages.add(UserMessage.from(input));
+            messages.add(UserMessage.from(processedInput));
             
             // 限制历史消息数量
             if (messages.size() > MAX_HISTORY) {

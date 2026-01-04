@@ -6,6 +6,7 @@
       @clear="handleClearChat" 
       @new-chat="handleNewChat"
       @cancel-request="handleCancelRequest"
+      @toggle-knowledge="toggleKnowledgePanel"
     />
     <ChatMessages 
       :messages="messages" 
@@ -19,6 +20,20 @@
       @send="handleSend"
       @cancel="handleCancelRequest"
     />
+    
+    <!-- 知识库面板 -->
+    <KnowledgePanel 
+      :is-open="isKnowledgePanelOpen" 
+      @close="isKnowledgePanelOpen = false"
+      ref="knowledgePanelRef"
+    />
+    
+    <!-- 遮罩层 -->
+    <div 
+      v-if="isKnowledgePanelOpen" 
+      class="overlay" 
+      @click="isKnowledgePanelOpen = false"
+    ></div>
   </div>
 </template>
 
@@ -28,6 +43,7 @@ import { v4 as uuidv4 } from 'uuid'
 import ChatHeader from './components/ChatHeader.vue'
 import ChatMessages from './components/ChatMessages.vue'
 import ChatInput from './components/ChatInput.vue'
+import KnowledgePanel from './components/KnowledgePanel.vue'
 import { chatApi } from './api/chat'
 
 // ========== 工具函数 ==========
@@ -94,6 +110,18 @@ const isLoading = ref(false)
 
 // 消息列表组件引用
 const messagesRef = ref(null)
+
+// 知识库面板状态
+const isKnowledgePanelOpen = ref(false)
+const knowledgePanelRef = ref(null)
+
+// 切换知识库面板
+const toggleKnowledgePanel = () => {
+  isKnowledgePanelOpen.value = !isKnowledgePanelOpen.value
+  if (isKnowledgePanelOpen.value && knowledgePanelRef.value) {
+    knowledgePanelRef.value.loadData()
+  }
+}
 
 // 滚动到底部
 const scrollToBottom = async () => {
@@ -266,5 +294,15 @@ onUnmounted(() => {
     border-radius: 16px;
     overflow: hidden;
   }
+}
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 999;
 }
 </style>

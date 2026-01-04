@@ -12,6 +12,12 @@
     </div>
     
     <div class="header-right">
+      <button class="icon-btn knowledge" @click="$emit('toggle-knowledge')" title="知识库">
+        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+        </svg>
+      </button>
       <button class="icon-btn" @click="$emit('new-chat')" title="新建会话">
         <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none">
           <path d="M12 5v14M5 12h14"/>
@@ -36,7 +42,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['clear', 'new-chat'])
+const emit = defineEmits(['clear', 'new-chat', 'toggle-knowledge'])
 
 const handleClear = () => {
   if (confirm('确定要清除当前对话的记忆吗？')) {
@@ -141,6 +147,11 @@ const handleClear = () => {
   &.danger:hover {
     background: rgba(255, 59, 48, 0.1);
     color: #ff3b30;
+  }
+
+  &.knowledge:hover {
+    background: rgba(52, 199, 89, 0.1);
+    color: #34c759;
   }
 }
 </style>

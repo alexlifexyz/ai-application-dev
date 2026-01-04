@@ -54,6 +54,13 @@
             <version>${langchain4j.version}</version>
         </dependency>
 
+        <!-- LangChain4j Core (RAG 支持) -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>
