@@ -1,0 +1,99 @@
+// CSS 变量和全局样式
+:root {
+  // 颜色
+  --primary-color: #007AFF;
+  --primary-hover: #0063ce;
+  
+  // 背景色
+  --bg-app: #f5f7f9;
+  --bg-chat: #ffffff;
+  --bg-input: #f5f7f9;
+  --bg-hover: rgba(0, 0, 0, 0.05);
+  --bg-message-user: linear-gradient(135deg, #007AFF, #0063ce);
+  --bg-message-ai: #f0f2f5;
+  
+  // 文字颜色
+  --text-primary: #1a1a1a;
+  --text-secondary: #65676b;
+  --text-muted: #999;
+  
+  // 边框
+  --border-color: #e1e4e8;
+}
+
+// 暗色模式
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-app: #1a1a1a;
+    --bg-chat: #242424;
+    --bg-input: #333;
+    --bg-hover: rgba(255, 255, 255, 0.1);
+    --bg-message-ai: #333;
+    
+    --text-primary: #e1e1e1;
+    --text-secondary: #999;
+    --text-muted: #666;
+    
+    --border-color: #404040;
+  }
+}
+
+// 重置样式
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  height: 100%;
+}
+
+// 滚动条样式
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.3);
+  border-radius: 4px;
+  
+  &:hover {
+    background: rgba(128, 128, 128, 0.5);
+  }
+}
+
+// 暗色模式滚动条
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    
+    &:hover {
+      background: rgba(255, 255, 255, 0.35);
+    }
+  }
+}
+
+// 选中文本样式
+::selection {
+  background: var(--primary-color);
+  color: white;
+}

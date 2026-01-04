@@ -1,0 +1,77 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /
+  
+spring:
+  application:
+    name: ai-application-dev
+  
+  # Jackson 配置
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+    default-property-inclusion: non_null
+
+# Springdoc OpenAPI 配置
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+  group-configs:
+    - group: 'default'
+      paths-to-match: '/**'
+      packages-to-scan: com.alex.ai.controller
+
+# LangChain4j 配置
+langchain4j:
+  open-ai:
+    chat-model:
+      # API Key（通过环境变量配置，留空则启用演示模式）
+      api-key: ${OPENAI_API_KEY:demo}
+      # API 基础 URL（支持 OpenAI 兼容接口）
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+      # 模型名称
+      model-name: ${OPENAI_MODEL:gpt-3.5-turbo}
+      # 温度参数（0-2，越高越随机）
+      temperature: 0.7
+      # 最大 token 数
+      max-tokens: 2000
+      # 超时时间
+      timeout: 60s
+      # 日志请求（开发环境可开启）
+      log-requests: true
+      log-responses: true
+    
+    # Embedding 模型配置（如需使用向量检索功能）
+    embedding-model:
+      api-key: ${OPENAI_API_KEY:your-api-key-here}
+      model-name: text-embedding-3-small
+      timeout: 60s
+
+  # 对话记忆配置
+  chat-memory:
+    # 保留最近的消息数
+    max-messages: 10
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    com.alex.ai: DEBUG
+    dev.langchain4j: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n"
+
+# 管理端点配置（可选）
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always

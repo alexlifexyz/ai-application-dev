@@ -1,0 +1,49 @@
+# Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+*.class
+*.jar
+*.war
+*.ear
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# Eclipse
+.classpath
+.project
+.settings/
+bin/
+
+# VS Code
+.vscode/
+
+# MacOS
+.DS_Store
+
+# Log files
+*.log
+logs/
+
+# Spring Boot
+spring-boot-devtools.properties
+
+# Environment variables
+.env
+.env.local
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Build outputs (keep static for deployment)
+# src/main/resources/static/
