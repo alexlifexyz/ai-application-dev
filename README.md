@@ -54,7 +54,7 @@
 
 ### 1. 克隆项目
 ```bash
-git clone https://github.com/your-username/ai-application-dev.git
+git clone https://github.com/alexlifexyz/ai-application-dev.git
 cd ai-application-dev
 ```
 
