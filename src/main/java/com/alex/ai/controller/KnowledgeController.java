@@ -69,6 +69,28 @@ public class KnowledgeController {
     }
 
     /**
+     * 获取知识详情
+     */
+    @Operation(summary = "获取知识详情", description = "根据 ID 获取知识条目的完整内容")
+    @GetMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> getKnowledgeDetail(@PathVariable String id) {
+        log.info("获取知识详情: {}", id);
+        
+        var detail = knowledgeService.getKnowledgeDetail(id);
+        
+        Map<String, Object> response = new HashMap<>();
+        if (detail != null) {
+            response.put("success", true);
+            response.put("data", detail);
+        } else {
+            response.put("success", false);
+            response.put("message", "知识条目不存在");
+        }
+        
+        return ResponseEntity.ok(response);
+    }
+
+    /**
      * 删除知识
      */
     @Operation(summary = "删除知识", description = "根据 ID 删除知识条目")

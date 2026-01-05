@@ -1,6 +1,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Spring%20Boot-3.2.1-brightgreen?logo=spring-boot" alt="Spring Boot">
-  <img src="https://img.shields.io/badge/LangChain4j-0.35.0-blue?logo=chainlink" alt="LangChain4j">
+  <img src="https://img.shields.io/badge/LangChain4j-1.10.0-blue?logo=chainlink" alt="LangChain4j">
+  <img src="https://img.shields.io/badge/Chroma-v2%20API-orange?logo=databricks" alt="Chroma">
   <img src="https://img.shields.io/badge/Vue.js-3.4-42b883?logo=vue.js" alt="Vue.js">
   <img src="https://img.shields.io/badge/Java-17+-orange?logo=openjdk" alt="Java">
   <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License">
@@ -10,7 +11,7 @@
 
 <p align="center">
   <strong>一个开箱即用的 AI 对话应用脚手架</strong><br>
-  基于 Spring Boot + LangChain4j + Vue 3 构建，支持流式对话、多轮会话记忆
+  基于 Spring Boot + LangChain4j + Vue 3 构建，支持流式对话、多轮会话记忆、Chroma 向量数据库持久化
 </p>
 
 <p align="center">
@@ -41,11 +42,13 @@
 - **前后端分离** — 清晰的架构，易于扩展
 
 ### 🧠 RAG 知识增强
+- **Chroma 持久化** — 支持 Chroma v2 API，知识数据持久存储，重启不丢失
+- **远程 Embedding** — 支持通义千问 text-embedding-v3（1024维），无需本地模型
 - **智能检索** — 余弦相似度匹配，精准找到相关知识
 - **自动分段** — 长文本智能切分（500字/段，50字重叠）
+- **详情查看** — 点击知识条目可查看完整内容和分段详情 🆕
 - **实时生效** — 添加知识后立即可用，无需重启
 - **可视化管理** — 侧边栏面板，便捷的增删改查操作
-- **内存存储** — 开发友好，可轻松切换为 Chroma/PgVector
 
 ### 🎨 精致 UI
 - **响应式设计** — 适配桌面和移动端
@@ -173,6 +176,7 @@ ai-application-dev/
 |------|------|------|
 | `POST` | `/api/knowledge` | 添加知识到知识库 |
 | `GET` | `/api/knowledge` | 获取知识列表 |
+| `GET` | `/api/knowledge/{id}` | 获取知识详情（含分段内容）🆕 |
 | `DELETE` | `/api/knowledge/{id}` | 删除指定知识 |
 | `POST` | `/api/knowledge/search` | 检索相关知识（向量相似度） |
 | `GET` | `/api/knowledge/stats` | 获取知识库统计信息 |
@@ -260,9 +264,9 @@ npm run build
 | 技术 | 版本 | 说明 |
 |------|------|------|
 | Spring Boot | 3.2.1 | Web 框架 |
-| LangChain4j | 0.35.0 | LLM 编排框架 |
-| all-MiniLM-L6-v2 | - | 本地嵌入模型（384维向量）🆕 |
-| InMemoryEmbeddingStore | - | 内存向量数据库 🆕 |
+| LangChain4j | 1.10.0 | LLM 编排框架（升级版） |
+| Chroma | v2 API | 向量数据库（持久化存储）🆕 |
+| text-embedding-v3 | 1024维 | 通义千问远程嵌入模型 🆕 |
 | OpenAI API | - | 大模型接口 |
 | Lombok | - | 简化代码 |
 | Springdoc | - | API 文档生成 |
@@ -354,20 +358,81 @@ private static final double MIN_SCORE = 0.5;    // 最低相似度阈值
 
 ### 进阶优化
 
-#### 切换为持久化向量数据库
+#### 向量存储方案选择
 
-```java
-// 当前：InMemoryEmbeddingStore（重启丢失）
-EmbeddingStore store = new InMemoryEmbeddingStore();
+本项目支持两种向量存储方案，通过配置切换：
 
-// 推荐生产环境：Chroma（持久化 + 高性能）
-EmbeddingStore store = ChromaEmbeddingStore.builder()
-    .baseUrl("http://localhost:8000")
-    .collectionName("my-knowledge")
-    .build();
+| 方案 | 适用场景 | 特点 |
+|------|----------|------|
+| **memory**（默认） | 开发测试、Demo 演示 | 零依赖，重启后数据丢失 |
+| **chroma** | 生产环境、持久化需求 | 需要 Docker，数据持久化 |
+
+#### 方案一：内存存储（默认）
+
+```yaml
+# application.yml（默认配置，无需修改）
+rag:
+  vector-store:
+    type: memory
 ```
 
-#### 支持文件上传
+**优势**：开箱即用，无需额外服务  
+**劣势**：重启后知识库数据丢失
+
+#### 方案二：Chroma 持久化存储
+
+**Step 1：启动 Chroma 服务**
+```bash
+# 方式一：使用 Python（推荐）
+pip install chromadb
+chroma run --host localhost --port 8000 --path ./chroma
+
+# 方式二：使用 Docker
+docker run -d --name chroma \
+  -p 8000:8000 \
+  -v chroma-data:/chroma/chroma \
+  chromadb/chroma:latest
+
+# 验证服务（Chroma v2 API）
+curl http://localhost:8000/api/v2/heartbeat
+```
+
+**Step 2：修改配置**
+```yaml
+# application.yml
+rag:
+  vector-store:
+    type: chroma
+    chroma:
+      base-url: http://localhost:8000
+      collection-name: ai-knowledge
+  embedding-model: text-embedding-v3  # 通义千问嵌入模型
+```
+
+**或通过环境变量**
+```bash
+export RAG_VECTOR_STORE_TYPE=chroma
+export CHROMA_BASE_URL=http://localhost:8000
+export CHROMA_COLLECTION=ai-knowledge
+export RAG_EMBEDDING_MODEL=text-embedding-v3
+mvn spring-boot:run
+```
+
+**优势**：数据持久化，支持百万级向量，重启后知识库自动恢复  
+**劣势**：需要部署 Chroma 服务
+
+#### 方案对比
+
+| 特性 | InMemory | Chroma |
+|------|----------|--------|
+| **部署复杂度** | ⭐（零依赖） | ⭐⭐（需 Python/Docker） |
+| **数据持久化** | ❌ | ✅ |
+| **重启恢复** | ❌ | ✅（自动恢复知识条目）|
+| **性能** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
+| **最大数据量** | ~100 万（受内存限制） | ~1000 万 |
+| **生产推荐** | ❌ | ✅ |
+
+#### 支持文件上传（规划中）
 
 ```java
 // TODO: 支持 PDF、Word、Markdown 等文件解析

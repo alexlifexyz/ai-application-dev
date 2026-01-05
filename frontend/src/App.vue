@@ -21,19 +21,23 @@
       @cancel="handleCancelRequest"
     />
     
-    <!-- 知识库面板 -->
-    <KnowledgePanel 
-      :is-open="isKnowledgePanelOpen" 
-      @close="isKnowledgePanelOpen = false"
-      ref="knowledgePanelRef"
-    />
+    <!-- 遮罩层 + 知识库面板 -->
+    <Transition name="overlay-fade">
+      <div 
+        v-if="isKnowledgePanelOpen" 
+        class="overlay" 
+        @click="isKnowledgePanelOpen = false"
+      ></div>
+    </Transition>
     
-    <!-- 遮罩层 -->
-    <div 
-      v-if="isKnowledgePanelOpen" 
-      class="overlay" 
-      @click="isKnowledgePanelOpen = false"
-    ></div>
+    <Transition name="panel-slide">
+      <KnowledgePanel 
+        v-if="isKnowledgePanelOpen"
+        :is-open="isKnowledgePanelOpen" 
+        @close="isKnowledgePanelOpen = false"
+        ref="knowledgePanelRef"
+      />
+    </Transition>
   </div>
 </template>
 
@@ -302,7 +306,32 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   z-index: 999;
+  cursor: pointer;
+}
+
+// 遮罩层淡入淡出动画
+.overlay-fade-enter-active,
+.overlay-fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.overlay-fade-enter-from,
+.overlay-fade-leave-to {
+  opacity: 0;
+}
+
+// 面板滑入滑出动画
+.panel-slide-enter-active,
+.panel-slide-leave-active {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.panel-slide-enter-from,
+.panel-slide-leave-to {
+  transform: translateX(100%);
 }
 </style>

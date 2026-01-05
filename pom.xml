@@ -18,12 +18,30 @@
     <name>AI Application Dev</name>
     <description>Spring Boot + LangChain4j Integration Demo</description>
 
+
+
+
+
+    <!-- 添加 Maven Central 仓库以获取最新 LangChain4j 版本 -->
+    <repositories>
+        <repository>
+            <id>maven-central-direct</id>
+            <url>https://repo1.maven.org/maven2</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+        </repository>
+    </repositories>
+
     <properties>
         <java.version>17</java.version>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <langchain4j.version>0.35.0</langchain4j.version>
+        <!-- 稳定版本（核心模块） -->
+        <langchain4j.version>1.10.0</langchain4j.version>
+        <!-- Beta 版本（社区/扩展模块） -->
+        <langchain4j.beta.version>1.10.0-beta18</langchain4j.beta.version>
     </properties>
 
     <dependencies>
@@ -37,7 +55,7 @@
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-spring-boot-starter</artifactId>
-            <version>${langchain4j.version}</version>
+            <version>${langchain4j.beta.version}</version>
         </dependency>
 
         <!-- LangChain4j OpenAI Support -->
@@ -51,7 +69,7 @@
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-embeddings-all-minilm-l6-v2</artifactId>
-            <version>${langchain4j.version}</version>
+            <version>${langchain4j.beta.version}</version>
         </dependency>
 
         <!-- LangChain4j Core (RAG 支持) -->
@@ -59,6 +77,13 @@
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j</artifactId>
             <version>${langchain4j.version}</version>
+        </dependency>
+
+        <!-- LangChain4j Chroma 向量数据库支持 -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-chroma</artifactId>
+            <version>${langchain4j.beta.version}</version>
         </dependency>
 
         <!-- Lombok -->

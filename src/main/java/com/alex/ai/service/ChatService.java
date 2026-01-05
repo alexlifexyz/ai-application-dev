@@ -1,6 +1,6 @@
 package com.alex.ai.service;
 
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +18,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ChatService {
 
-    private final ChatLanguageModel chatModel;
+    private final ChatModel chatModel;
 
     /**
      * 简单对话 - 单轮问答
@@ -29,7 +29,8 @@ public class ChatService {
     public String chat(String userInput) {
         log.info("接收到用户消息: {}", userInput);
         try {
-            String response = chatModel.generate(userInput);
+            // LangChain4j 1.x: 使用 chat() 方法代替 generate()
+            var response = chatModel.chat(userInput);
             log.info("AI 响应: {}", response);
             return response;
         } catch (Exception e) {
@@ -52,11 +53,12 @@ public class ChatService {
     public String chatWithContext(String systemPrompt, String userInput) {
         log.info("系统提示词: {}, 用户消息: {}", systemPrompt, userInput);
         try {
-            var response = chatModel.generate(
+            // LangChain4j 1.x: 使用 chat() 方法，传入消息列表
+            var response = chatModel.chat(
                 SystemMessage.from(systemPrompt),
                 UserMessage.from(userInput)
             );
-            String result = response.content().text();
+            String result = response.aiMessage().text();
             log.info("AI 响应: {}", result);
             return result;
         } catch (Exception e) {

@@ -1,12 +1,12 @@
 package com.alex.ai.service;
 
-import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.ChatLanguageModel;
-import dev.langchain4j.model.chat.StreamingChatLanguageModel;
-import dev.langchain4j.model.output.Response;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.StreamingChatModel;
+import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,10 +30,10 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequiredArgsConstructor
 public class ConversationService {
 
-    private final ChatLanguageModel chatModel;
+    private final ChatModel chatModel;
     
     @Autowired(required = false)
-    private StreamingChatLanguageModel streamingChatModel;
+    private StreamingChatModel streamingChatModel;
     
     @Autowired(required = false)
     private KnowledgeService knowledgeService;
@@ -103,14 +103,9 @@ public class ConversationService {
         }
         
         try {
-            // 检查知识库是否有内容
-            var stats = knowledgeService.getStats();
-            if (stats.totalEntries() == 0) {
-                log.debug("知识库为空，跳过 RAG");
-                return input;
-            }
-            
-            // 使用 RAG 增强
+            // 直接尝试 RAG 增强，让向量库决定是否有相关内容
+            // 不再检查 totalEntries()，因为元数据存储在内存中会在重启后丢失
+            // 而向量数据持久化在 Chroma 中，可以正常检索
             String augmented = knowledgeService.buildAugmentedPrompt(input);
             if (!augmented.equals(input)) {
                 log.info("已应用 RAG 增强，会话: {}", sessionId);
@@ -150,12 +145,12 @@ public class ConversationService {
                 messages.addAll(trimmed);
             }
             
-            // 调用 AI 模型
-            Response<AiMessage> response = chatModel.generate(messages);
-            String aiResponse = response.content().text();
+            // 调用 AI 模型 (LangChain4j 1.x: chat() 返回 ChatResponse)
+            ChatResponse response = chatModel.chat(messages);
+            String aiResponse = response.aiMessage().text();
             
             // 添加 AI 响应到历史
-            messages.add(response.content());
+            messages.add(response.aiMessage());
             
             log.info("会话 {} 响应成功", sessionId);
             return aiResponse;
@@ -211,25 +206,25 @@ public class ConversationService {
             // 用于收集完整响应的缓冲区
             StringBuilder fullResponse = new StringBuilder();
             
-            // 调用流式 API
-            streamingChatModel.generate(messages, new dev.langchain4j.model.StreamingResponseHandler<AiMessage>() {
+            // 调用流式 API (LangChain4j 1.x: 使用 StreamingChatResponseHandler)
+            streamingChatModel.chat(messages, new StreamingChatResponseHandler() {
                 @Override
-                public void onNext(String token) {
+                public void onPartialResponse(String partialResponse) {
                     try {
-                        fullResponse.append(token);
+                        fullResponse.append(partialResponse);
                         // 发送每个 token，并立即刷新
-                        emitter.send(SseEmitter.event().data(token));
-                        log.debug("发送 token: {}", token);
+                        emitter.send(SseEmitter.event().data(partialResponse));
+                        log.debug("发送 token: {}", partialResponse);
                     } catch (IOException e) {
                         log.error("发送 token 失败", e);
                     }
                 }
 
                 @Override
-                public void onComplete(Response<AiMessage> response) {
+                public void onCompleteResponse(ChatResponse response) {
                     try {
                         // 添加 AI 响应到历史
-                        messages.add(response.content());
+                        messages.add(response.aiMessage());
                         // 发送完成信号
                         emitter.send(SseEmitter.event().name("done").data("[DONE]"));
                         emitter.complete();

@@ -61,6 +61,21 @@ export const knowledgeApi = {
   },
 
   /**
+   * 获取知识详情
+   * @param {string} id - 知识条目 ID
+   * @returns {Promise<Object>} 返回 { success, data: KnowledgeDetail }
+   */
+  async getKnowledgeDetail(id) {
+    const response = await fetch(`${API_BASE}/${id}`)
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    return response.json()
+  },
+
+  /**
    * 检索相关知识
    * @param {string} query - 查询文本
    * @param {number} maxResults - 最大返回数量（默认 5）

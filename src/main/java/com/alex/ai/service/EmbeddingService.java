@@ -3,11 +3,12 @@ package com.alex.ai.service;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.embedding.onnx.allminilml6v2.AllMiniLmL6V2EmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingMatch;
+import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
+import dev.langchain4j.store.embedding.EmbeddingSearchResult;
 import dev.langchain4j.store.embedding.EmbeddingStore;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -15,24 +16,36 @@ import java.util.List;
 /**
  * 向量嵌入服务 - 负责文本向量化和相似度搜索
  * 
- * 使用本地 all-MiniLM-L6-v2 模型，无需调用外部 API
- * 模型特点：
- * - 维度：384
- * - 多语言支持（包括中文）
- * - 轻量级，适合本地部署
+ * 使用远程 Embedding API（OpenAI/通义千问等兼容接口）
  * 
  * @author Alex
  * @since 2025-01-04
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class EmbeddingService {
 
     private final EmbeddingStore<TextSegment> embeddingStore;
-    
-    // 使用本地嵌入模型（无需 API 调用）
-    private final EmbeddingModel embeddingModel = new AllMiniLmL6V2EmbeddingModel();
+    private final EmbeddingModel embeddingModel;
+    private final String modelName;
+    private final String baseUrl;
+
+    /**
+     * 构造函数注入（从 Spring 容器获取已配置的 Bean）
+     */
+    public EmbeddingService(
+            EmbeddingModel embeddingModel,
+            EmbeddingStore<TextSegment> embeddingStore,
+            @Value("${langchain4j.open-ai.embedding-model.model-name:text-embedding-v3}") String modelName,
+            @Value("${langchain4j.open-ai.chat-model.base-url:https://dashscope.aliyuncs.com/compatible-mode/v1}") String baseUrl) {
+        this.embeddingModel = embeddingModel;
+        this.embeddingStore = embeddingStore;
+        this.modelName = modelName;
+        this.baseUrl = baseUrl;
+        log.info("✅ EmbeddingService 初始化成功");
+        log.info("   - Embedding 模型: {}", embeddingModel.getClass().getSimpleName());
+        log.info("   - 向量存储: {}", embeddingStore.getClass().getSimpleName());
+    }
 
     /**
      * 将文本存储到向量库
@@ -60,10 +73,30 @@ public class EmbeddingService {
      * @return 存储的文档 ID 列表
      */
     public List<String> storeTexts(List<String> texts, String source) {
-        log.info("批量存储 {} 个文本片段, 来源: {}", texts.size(), source);
+        return storeTexts(texts, source, null);
+    }
+
+    /**
+     * 批量存储文本片段（带标题和创建时间）
+     * 
+     * @param texts 文本列表
+     * @param source 来源标识
+     * @param title 知识条目标题（用于恢复时显示）
+     * @param createdAt 创建时间戳
+     * @return 存储的文档 ID 列表
+     */
+    public List<String> storeTexts(List<String> texts, String source, String title, long createdAt) {
+        log.info("批量存储 {} 个文本片段, 来源: {}, 标题: {}", texts.size(), source, title);
         
         List<TextSegment> segments = texts.stream()
-            .map(text -> TextSegment.from(text, dev.langchain4j.data.document.Metadata.from("source", source)))
+            .map(text -> {
+                var metadata = dev.langchain4j.data.document.Metadata.from("source", source);
+                if (title != null && !title.isEmpty()) {
+                    metadata.put("title", title);
+                }
+                metadata.put("createdAt", String.valueOf(createdAt));
+                return TextSegment.from(text, metadata);
+            })
             .toList();
         
         List<Embedding> embeddings = embeddingModel.embedAll(segments).content();
@@ -71,6 +104,49 @@ public class EmbeddingService {
         
         log.info("批量存储完成, 共 {} 条记录", ids.size());
         return ids;
+    }
+
+    /**
+     * 批量存储文本片段（带标题）
+     * 
+     * @param texts 文本列表
+     * @param source 来源标识
+     * @param title 知识条目标题（用于恢复时显示）
+     * @return 存储的文档 ID 列表
+     */
+    public List<String> storeTexts(List<String> texts, String source, String title) {
+        return storeTexts(texts, source, title, System.currentTimeMillis());
+    }
+
+    /**
+     * 获取向量库中所有存储的文档（用于启动时恢复）
+     * 使用一个通用查询词来获取所有文档
+     * 
+     * @param maxResults 最大返回数量
+     * @return 所有匹配的文档
+     */
+    public List<EmbeddingMatch<TextSegment>> getAllDocuments(int maxResults) {
+        log.info("获取向量库中所有文档, 最大数量: {}", maxResults);
+        
+        try {
+            // 使用一个通用的查询词来获取文档，设置最低阈值
+            Embedding queryEmbedding = embeddingModel.embed("知识 内容 文档 信息").content();
+            
+            EmbeddingSearchRequest searchRequest = EmbeddingSearchRequest.builder()
+                .queryEmbedding(queryEmbedding)
+                .maxResults(maxResults)
+                .minScore(0.0) // 最低阈值，获取所有可能的文档
+                .build();
+            
+            EmbeddingSearchResult<TextSegment> result = embeddingStore.search(searchRequest);
+            List<EmbeddingMatch<TextSegment>> matches = result.matches();
+            
+            log.info("获取到 {} 个文档", matches.size());
+            return matches;
+        } catch (Exception e) {
+            log.warn("获取所有文档失败: {}", e.getMessage());
+            return List.of();
+        }
     }
 
     /**
@@ -87,7 +163,16 @@ public class EmbeddingService {
             maxResults, minScore);
         
         Embedding queryEmbedding = embeddingModel.embed(query).content();
-        List<EmbeddingMatch<TextSegment>> matches = embeddingStore.findRelevant(queryEmbedding, maxResults, minScore);
+        
+        // LangChain4j 1.x: 使用 EmbeddingSearchRequest 和 search() 方法
+        EmbeddingSearchRequest searchRequest = EmbeddingSearchRequest.builder()
+            .queryEmbedding(queryEmbedding)
+            .maxResults(maxResults)
+            .minScore(minScore)
+            .build();
+        
+        EmbeddingSearchResult<TextSegment> result = embeddingStore.search(searchRequest);
+        List<EmbeddingMatch<TextSegment>> matches = result.matches();
         
         log.info("搜索完成, 找到 {} 个相关文档", matches.size());
         return matches;
@@ -107,6 +192,26 @@ public class EmbeddingService {
      * 获取嵌入模型信息
      */
     public String getModelInfo() {
-        return "all-MiniLM-L6-v2 (本地模型, 384维)";
+        // 判断 API 提供商
+        String provider = "远程 API";
+        if (baseUrl.contains("dashscope.aliyuncs.com")) {
+            provider = "通义千问";
+        } else if (baseUrl.contains("api.openai.com")) {
+            provider = "OpenAI";
+        } else if (baseUrl.contains("api.siliconflow.cn")) {
+            provider = "硅基流动";
+        }
+        
+        // 根据模型名称判断向量维度
+        int dimension = 1024; // text-embedding-v3 默认维度
+        if (modelName.contains("text-embedding-3-small")) {
+            dimension = 1536;
+        } else if (modelName.contains("text-embedding-3-large")) {
+            dimension = 3072;
+        } else if (modelName.contains("text-embedding-ada-002")) {
+            dimension = 1536;
+        }
+        
+        return String.format("%s (%s, %d维)", modelName, provider, dimension);
     }
 }

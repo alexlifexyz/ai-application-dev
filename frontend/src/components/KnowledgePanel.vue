@@ -58,10 +58,11 @@
         v-for="item in knowledgeList" 
         :key="item.id" 
         class="knowledge-item"
+        @click="handleViewDetail(item.id)"
       >
         <div class="item-header">
-          <span class="item-title">{{ item.title }}</span>
-          <button class="btn-delete" @click="handleDeleteKnowledge(item.id)" title="删除">
+          <span class="item-title" :title="item.title">{{ item.title }}</span>
+          <button class="btn-delete" @click.stop="handleDeleteKnowledge(item.id)" title="删除">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="3 6 5 6 21 6"></polyline>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -71,15 +72,56 @@
         <div class="item-meta">
           <span>📝 {{ formatLength(item.contentLength) }}</span>
           <span>🧩 {{ item.segmentCount }} 片段</span>
-          <span>🕐 {{ formatTime(item.createdAt) }}</span>
+          <span :title="new Date(item.createdAt).toLocaleString()">🕐 {{ formatTime(item.createdAt) }}</span>
         </div>
       </div>
     </div>
 
     <!-- 操作提示 -->
     <div class="panel-footer">
-      <p class="tip">💡 提示：知识库内容会自动用于增强 AI 回答</p>
+      <p class="tip">💡 提示：点击知识条目可查看详情</p>
     </div>
+
+    <!-- 详情弹窗 -->
+    <Transition name="modal-fade">
+      <div v-if="detailModal.visible" class="detail-modal-overlay" @click="closeDetailModal">
+        <div class="detail-modal" @click.stop>
+          <div class="detail-header">
+            <h4>{{ detailModal.data?.title || '知识详情' }}</h4>
+            <button class="close-btn" @click="closeDetailModal">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+          
+          <div class="detail-meta">
+            <span>📝 {{ formatLength(detailModal.data?.contentLength || 0) }}</span>
+            <span>🧩 {{ detailModal.data?.segmentCount || 0 }} 个片段</span>
+            <span>🕐 {{ detailModal.data?.createdAt ? new Date(detailModal.data.createdAt).toLocaleString() : '' }}</span>
+          </div>
+          
+          <div class="detail-content" v-if="!detailModal.loading">
+            <div 
+              v-for="(segment, index) in detailModal.data?.segments || []" 
+              :key="index" 
+              class="segment-item"
+            >
+              <div class="segment-header">
+                <span class="segment-index">片段 {{ index + 1 }}</span>
+                <span class="segment-length">{{ segment.length }} 字</span>
+              </div>
+              <div class="segment-text">{{ segment }}</div>
+            </div>
+          </div>
+          
+          <div v-else class="detail-loading">
+            <span>加载中...</span>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -115,6 +157,13 @@ const newKnowledge = ref({
 
 // 添加中状态
 const isAdding = ref(false)
+
+// 详情弹窗状态
+const detailModal = ref({
+  visible: false,
+  loading: false,
+  data: null
+})
 
 // 加载统计和列表
 const loadData = async () => {
@@ -194,6 +243,30 @@ const formatTime = (timestamp) => {
   return date.toLocaleDateString()
 }
 
+// 查看知识详情
+const handleViewDetail = async (id) => {
+  detailModal.value.visible = true
+  detailModal.value.loading = true
+  detailModal.value.data = null
+  
+  try {
+    const result = await knowledgeApi.getKnowledgeDetail(id)
+    if (result.success) {
+      detailModal.value.data = result.data
+    }
+  } catch (error) {
+    console.error('获取知识详情失败:', error)
+  } finally {
+    detailModal.value.loading = false
+  }
+}
+
+// 关闭详情弹窗
+const closeDetailModal = () => {
+  detailModal.value.visible = false
+  detailModal.value.data = null
+}
+
 onMounted(() => {
   loadData()
 })
@@ -205,24 +278,18 @@ defineExpose({ loadData })
 <style lang="scss" scoped>
 .knowledge-panel {
   position: fixed;
-  right: -400px;
+  right: 0;
   top: 0;
   width: 380px;
   height: 100vh;
   background: var(--bg-primary);
-  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
+  box-shadow: -8px 0 30px rgba(0, 0, 0, 0.2);
   display: flex;
   flex-direction: column;
-  transition: right 0.3s ease;
   z-index: 1000;
-
-  &.is-open {
-    right: 0;
-  }
 
   @media (max-width: 768px) {
     width: 100%;
-    right: -100%;
   }
 }
 
@@ -363,17 +430,32 @@ defineExpose({ loadData })
     border-radius: 8px;
     margin-bottom: 10px;
     border: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      border-color: var(--primary-color);
+      background: var(--bg-hover, rgba(99, 102, 241, 0.05));
+    }
 
     .item-header {
       display: flex;
       justify-content: space-between;
-      align-items: center;
+      align-items: flex-start;
       margin-bottom: 8px;
 
       .item-title {
         font-weight: 500;
         color: var(--text-primary);
         font-size: 14px;
+        line-height: 1.4;
+        margin-right: 8px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        word-break: break-all;
       }
 
       .btn-delete {
@@ -384,12 +466,18 @@ defineExpose({ loadData })
         color: var(--text-secondary);
         border-radius: 4px;
         transition: all 0.2s;
+        opacity: 0;
+        flex-shrink: 0;
 
         &:hover {
           color: #e74c3c;
           background: rgba(231, 76, 60, 0.1);
         }
       }
+    }
+
+    &:hover .btn-delete {
+      opacity: 1;
     }
 
     .item-meta {
@@ -411,5 +499,144 @@ defineExpose({ loadData })
     font-size: 12px;
     color: var(--text-tertiary);
   }
+}
+
+// 详情弹窗样式
+.detail-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 20px;
+}
+
+.detail-modal {
+  background: var(--bg-primary);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 600px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: modalSlideIn 0.3s ease;
+
+  @keyframes modalSlideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-20px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color);
+
+    h4 {
+      margin: 0;
+      font-size: 16px;
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      color: var(--text-secondary);
+      border-radius: 4px;
+      transition: all 0.2s;
+
+      &:hover {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+      }
+    }
+  }
+
+  .detail-meta {
+    display: flex;
+    gap: 16px;
+    padding: 12px 20px;
+    background: var(--bg-secondary);
+    font-size: 13px;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .detail-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+
+    .segment-item {
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      border: 1px solid var(--border-color);
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+
+      .segment-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+        font-size: 12px;
+
+        .segment-index {
+          color: var(--primary-color);
+          font-weight: 600;
+        }
+
+        .segment-length {
+          color: var(--text-tertiary);
+        }
+      }
+
+      .segment-text {
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--text-primary);
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+    }
+  }
+
+  .detail-loading {
+    padding: 40px;
+    text-align: center;
+    color: var(--text-secondary);
+  }
+}
+
+// 弹窗动画
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+  opacity: 0;
 }
 </style>

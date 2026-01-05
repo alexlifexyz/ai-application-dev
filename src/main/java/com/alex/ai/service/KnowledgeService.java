@@ -2,19 +2,19 @@ package com.alex.ai.service;
 
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.store.embedding.EmbeddingMatch;
-import lombok.RequiredArgsConstructor;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 /**
  * 知识库服务 - 管理 RAG 知识库的增删改查
  * 
- * 内存版实现特点：
- * - 使用 ConcurrentHashMap 存储知识条目元数据
+ * 改进版实现特点：
+ * - 使用 ConcurrentHashMap 缓存知识条目元数据
+ * - 启动时自动从 Chroma 向量库恢复已存储的知识条目
  * - 通过 EmbeddingService 进行向量化存储和检索
  * - 支持文本分段，优化检索效果
  * 
@@ -23,7 +23,6 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class KnowledgeService {
 
     private final EmbeddingService embeddingService;
@@ -44,6 +43,82 @@ public class KnowledgeService {
      */
     private static final int SEGMENT_OVERLAP = 50;
 
+    public KnowledgeService(EmbeddingService embeddingService) {
+        this.embeddingService = embeddingService;
+    }
+
+    /**
+     * 应用启动后自动从 Chroma 恢复知识条目元数据
+     */
+    @PostConstruct
+    public void initializeFromVectorStore() {
+        log.info("🔄 正在从向量库恢复知识条目元数据...");
+        try {
+            // 从 Chroma 获取所有存储的文档
+            List<EmbeddingMatch<TextSegment>> matches = embeddingService.getAllDocuments(1000);
+            
+            if (matches.isEmpty()) {
+                log.info("向量库为空，无需恢复");
+                return;
+            }
+            
+            // 按 source 分组统计
+            Map<String, List<EmbeddingMatch<TextSegment>>> sourceGroups = new HashMap<>();
+            for (EmbeddingMatch<TextSegment> match : matches) {
+                String source = match.embedded().metadata().getString("source");
+                if (source != null && !source.isEmpty()) {
+                    sourceGroups.computeIfAbsent(source, k -> new ArrayList<>()).add(match);
+                }
+            }
+            
+            // 为每个 source 创建 KnowledgeEntry
+            for (Map.Entry<String, List<EmbeddingMatch<TextSegment>>> entry : sourceGroups.entrySet()) {
+                String sourceId = entry.getKey();
+                List<EmbeddingMatch<TextSegment>> segments = entry.getValue();
+                
+                // 计算总字符数
+                int totalChars = segments.stream()
+                    .mapToInt(m -> m.embedded().text().length())
+                    .sum();
+                
+                // 优先从 metadata 获取标题，否则使用内容预览
+                String title = segments.get(0).embedded().metadata().getString("title");
+                if (title == null || title.isEmpty()) {
+                    String firstContent = segments.get(0).embedded().text();
+                    title = firstContent.length() > 30 
+                        ? firstContent.substring(0, 30) + "..." 
+                        : firstContent;
+                }
+                
+                // 尝试从 metadata 获取创建时间
+                long createdAt = System.currentTimeMillis();
+                String createdAtStr = segments.get(0).embedded().metadata().getString("createdAt");
+                if (createdAtStr != null && !createdAtStr.isEmpty()) {
+                    try {
+                        createdAt = Long.parseLong(createdAtStr);
+                    } catch (NumberFormatException e) {
+                        // 忽略解析错误，使用当前时间
+                    }
+                }
+                
+                // 创建知识条目（不包含完整的 segmentIds，因为无法完全恢复）
+                KnowledgeEntry knowledgeEntry = new KnowledgeEntry(
+                    sourceId,
+                    title,
+                    totalChars,
+                    segments.size(),
+                    List.of(), // segmentIds 无法完全恢复
+                    createdAt
+                );
+                knowledgeEntries.put(sourceId, knowledgeEntry);
+            }
+            
+            log.info("✅ 从向量库恢复了 {} 条知识条目", knowledgeEntries.size());
+        } catch (Exception e) {
+            log.warn("⚠️ 从向量库恢复知识条目失败: {}，将从空知识库开始", e.getMessage());
+        }
+    }
+
     /**
      * 添加知识到知识库
      * 
@@ -60,8 +135,10 @@ public class KnowledgeService {
         List<String> segments = splitText(content, SEGMENT_SIZE, SEGMENT_OVERLAP);
         log.info("文本分为 {} 个片段", segments.size());
         
-        // 存储所有分段到向量库
-        List<String> segmentIds = embeddingService.storeTexts(segments, entryId);
+        long createdAt = System.currentTimeMillis();
+        
+        // 存储所有分段到向量库（带标题和创建时间，便于恢复时显示）
+        List<String> segmentIds = embeddingService.storeTexts(segments, entryId, title, createdAt);
         
         // 记录知识条目元数据
         KnowledgeEntry entry = new KnowledgeEntry(
@@ -70,7 +147,7 @@ public class KnowledgeService {
             content.length(), 
             segments.size(),
             segmentIds,
-            System.currentTimeMillis()
+            createdAt
         );
         knowledgeEntries.put(entryId, entry);
         
@@ -138,6 +215,36 @@ public class KnowledgeService {
             .stream()
             .sorted((a, b) -> Long.compare(b.createdAt(), a.createdAt()))
             .toList();
+    }
+
+    /**
+     * 获取知识条目详情（包括所有片段内容）
+     * 
+     * @param entryId 知识条目 ID
+     * @return 知识详情，包含所有片段
+     */
+    public KnowledgeDetail getKnowledgeDetail(String entryId) {
+        KnowledgeEntry entry = knowledgeEntries.get(entryId);
+        if (entry == null) {
+            return null;
+        }
+        
+        // 从向量库检索该知识条目的所有片段
+        List<EmbeddingMatch<TextSegment>> matches = embeddingService.getAllDocuments(1000);
+        
+        List<String> segments = matches.stream()
+            .filter(m -> entryId.equals(m.embedded().metadata().getString("source")))
+            .map(m -> m.embedded().text())
+            .toList();
+        
+        return new KnowledgeDetail(
+            entry.id(),
+            entry.title(),
+            entry.contentLength(),
+            entry.segmentCount(),
+            segments,
+            entry.createdAt()
+        );
     }
 
     /**
@@ -258,5 +365,17 @@ public class KnowledgeService {
         int totalSegments,
         long totalCharacters,
         String embeddingModel
+    ) {}
+
+    /**
+     * 知识条目详情（包含完整片段内容）
+     */
+    public record KnowledgeDetail(
+        String id,
+        String title,
+        int contentLength,
+        int segmentCount,
+        List<String> segments,
+        long createdAt
     ) {}
 }

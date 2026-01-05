@@ -31,11 +31,11 @@ langchain4j:
   open-ai:
     chat-model:
       # API Key（通过环境变量配置，留空则启用演示模式）
-      api-key: ${OPENAI_API_KEY:demo}
+      api-key: ${OPENAI_API_KEY:sk-90a86cbf6aee493d84554454eb39e785}
       # API 基础 URL（支持 OpenAI 兼容接口）
-      base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+      base-url: ${OPENAI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
       # 模型名称
-      model-name: ${OPENAI_MODEL:gpt-3.5-turbo}
+      model-name: ${OPENAI_MODEL:qwen-flash}
       # 温度参数（0-2，越高越随机）
       temperature: 0.7
       # 最大 token 数
@@ -46,11 +46,13 @@ langchain4j:
       log-requests: true
       log-responses: true
     
-    # Embedding 模型配置（如需使用向量检索功能）
+    # Embedding 模型配置（向量检索功能）
+    # 使用通义千问 text-embedding-v3（与 base-url 配置的 API 兼容）
+    # 如使用 OpenAI 原生 API，可改为 text-embedding-3-small
     embedding-model:
-      api-key: ${OPENAI_API_KEY:your-api-key-here}
-      model-name: text-embedding-3-small
-      timeout: 60s
+      api-key: ${OPENAI_API_KEY:sk-90a86cbf6aee493d84554454eb39e785}
+      model-name: text-embedding-v3
+      timeout: 30s
 
   # 对话记忆配置
   chat-memory:
@@ -75,3 +77,16 @@ management:
   endpoint:
     health:
       show-details: always
+
+# RAG 向量存储配置
+rag:
+  vector-store:
+    # 存储类型：memory（内存，默认）| chroma（持久化）
+    type: ${RAG_VECTOR_STORE_TYPE:chroma}
+    
+    # Chroma 配置（当 type=chroma 时生效）
+    chroma:
+      # Chroma 服务地址（Docker: docker run -d -p 8000:8000 chromadb/chroma）
+      base-url: ${CHROMA_BASE_URL:http://localhost:8000}
+      # 集合名称
+      collection-name: ${CHROMA_COLLECTION:ai-knowledge}
