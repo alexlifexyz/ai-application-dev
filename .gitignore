@@ -47,3 +47,6 @@ frontend/dist/
 
 # Build outputs (keep static for deployment)
 # src/main/resources/static/
+
+# Chroma vector database data
+chroma/
