@@ -59,6 +59,16 @@ langchain4j:
     # 保留最近的消息数
     max-messages: 10
 
+# 会话配置
+conversation:
+  session:
+    # 会话过期时间（分钟）
+    expire-minutes: ${SESSION_EXPIRE_MINUTES:30}
+    # 清理任务执行间隔（分钟）
+    cleanup-interval-minutes: ${SESSION_CLEANUP_INTERVAL:5}
+    # 最大会话数量
+    max-sessions: ${SESSION_MAX_COUNT:1000}
+
 # 日志配置
 logging:
   level:
@@ -90,3 +100,31 @@ rag:
       base-url: ${CHROMA_BASE_URL:http://localhost:8000}
       # 集合名称
       collection-name: ${CHROMA_COLLECTION:ai-knowledge}
+
+# API 安全配置
+api:
+  security:
+    # 是否启用 API Key 认证（默认关闭，开发阶段无需认证）
+    enabled: ${API_AUTH_ENABLED:false}
+    # 有效的 API Key 列表（生产环境通过环境变量配置）
+    api-keys:
+      - ${API_KEY_1:}
+      - ${API_KEY_2:}
+    # API Key 请求头名称
+    header-name: X-API-Key
+    # 白名单路径
+    exclude-paths:
+      - /api/chat/health
+      - /swagger-ui/**
+      - /v3/api-docs/**
+      - /actuator/**
+    # 限流配置
+    rate-limit:
+      # 是否启用限流
+      enabled: ${RATE_LIMIT_ENABLED:true}
+      # 每分钟全局最大请求数
+      requests-per-minute: 120
+      # 每个 IP 每分钟最大请求数
+      requests-per-minute-per-ip: 60
+      # 聊天接口每分钟最大请求数
+      chat-requests-per-minute: 30

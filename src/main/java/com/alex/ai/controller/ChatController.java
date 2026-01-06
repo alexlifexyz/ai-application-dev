@@ -2,6 +2,7 @@ package com.alex.ai.controller;
 
 import com.alex.ai.model.ChatRequest;
 import com.alex.ai.model.ChatResponse;
+import com.alex.ai.security.RateLimit;
 import com.alex.ai.service.ChatService;
 import com.alex.ai.service.ConversationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,6 +45,7 @@ public class ChatController {
      */
     @Operation(summary = "简单对话", description = "单轮问答，不保留上下文")
     @PostMapping("/simple")
+    @RateLimit(requestsPerMinute = 30, keyPrefix = "chat-simple")
     public ResponseEntity<ChatResponse> simpleChat(@Valid @RequestBody ChatRequest request) {
         log.info("收到简单对话请求: {}", request.getMessage());
         String response = chatService.chat(request.getMessage());
@@ -58,6 +60,7 @@ public class ChatController {
      */
     @Operation(summary = "上下文对话", description = "支持自定义系统提示词的对话")
     @PostMapping("/with-context")
+    @RateLimit(requestsPerMinute = 30, keyPrefix = "chat-context")
     public ResponseEntity<ChatResponse> chatWithContext(@Valid @RequestBody ChatRequest request) {
         log.info("收到上下文对话请求");
         String systemPrompt = request.getSystemPrompt() != null 
@@ -76,6 +79,7 @@ public class ChatController {
      */
     @Operation(summary = "多轮对话", description = "支持上下文记忆的多轮对话，通过 sessionId 区分会话")
     @PostMapping("/conversation")
+    @RateLimit(requestsPerMinute = 30, keyPrefix = "chat-conversation")
     public ResponseEntity<ChatResponse> conversation(@Valid @RequestBody ChatRequest request) {
         String sessionId = request.getSessionId() != null 
             ? request.getSessionId() 
@@ -94,6 +98,7 @@ public class ChatController {
      */
     @Operation(summary = "流式多轮对话", description = "支持上下文记忆的流式对话，实时返回 AI 响应")
     @PostMapping(value = "/conversation/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @RateLimit(requestsPerMinute = 20, keyPrefix = "chat-stream")
     public SseEmitter streamConversation(@Valid @RequestBody ChatRequest request) {
         String sessionId = request.getSessionId() != null 
             ? request.getSessionId() 
